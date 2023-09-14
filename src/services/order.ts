@@ -3,7 +3,7 @@ import { Product, Order, OrderDetail, User, Voucher } from "../models";
 import { getAll, getById } from "../repositories/crud";
 import { JwtPayload, OrderItemDto, createOrderDto } from "../types";
 import { AppError } from "../utils";
-import { sequelize } from "../config";
+import { redis, sequelize } from "../config";
 import { getVoucherForUser, getVoucherForOrderDetails } from "./voucher";
 
 async function getAllOrders() {
@@ -20,13 +20,13 @@ async function getMyOrders(userId: number) {
     return orders;
 }
 
-async function getOrder(res: Response, orderId: number, user: JwtPayload) {
+async function getOrder(orderId: number, user: JwtPayload) {
     const order: any = await Order.findByPk(orderId, {
         attributes: ['id', 'totalCost', 'status', 'discount'],
         include: [
             {
                 model: OrderDetail,
-                attributes: ['id', 'quantity', 'total'],
+                attributes: ['id', 'quantity', 'total', 'totalAfterApplied'],
                 include: [{
                     model: Product,
                     attributes: ['id', 'name', 'price']
@@ -43,64 +43,79 @@ async function getOrder(res: Response, orderId: number, user: JwtPayload) {
         ]
     });
 
-    if(!order) throw AppError.NotFound(res, `Id not found`);
+    if(!order) new Error(`Order ${orderId} not found`);
     
-    if(!user.isAdmin && order.User.id !== user.id) throw AppError.Forbidden(res, 'You are not allowed to read this order');
+    if(!user.isAdmin && order.User.id !== user.id) new Error('You are not allowed to read this order');
 
     return order;
 }
 
-async function createOrder(res: Response, dto: createOrderDto, user: JwtPayload) {
+async function createOrder(dto: createOrderDto, user: JwtPayload) {
     try {
         const result = await sequelize.transaction(async (t) => {
             // return newOrder;
 
-            const {totalCost, orderDetailsWithTotal} = await calculateOrder(res, dto.items);
+            const {totalCost, orderDetailsWithTotal} = await calculateOrder(dto.items);
             let discount = 0;
             const voucherDb: any = {};
 
             if(dto.voucherIds) {
                 const vouchersForUser = await getVoucherForUser(user, totalCost, false, t);
-                dto.voucherIds.forEach(voucherId => {
+                for(const voucherId of dto.voucherIds){
                     const voucher = vouchersForUser[voucherId]
                     voucherDb[voucherId] = voucher;
                     if(!voucher) 
-                        throw AppError.BadRequest(res, `Voucher ${voucherId} can not applied for this order`);
+                        throw new Error(`Voucher ${voucherId} can not applied for this order`);
+                    
+                    const quantity = await redis.get(voucherId.toString());
+                    console.log('quantity: ' + quantity);
+                    if(!quantity || parseInt(quantity) < 1) 
+                        throw new Error(`Voucher ${voucherId} is out of stock`);
                     
                     const value = voucher.type === 'value' ? voucher.value : (voucher.value * totalCost) / 100;
                     discount += value < voucher.maxValue ? value : voucher.maxValue;
-                });
+                }
             }
 
             const vouchersForOrderDetails = await getVoucherForOrderDetails(orderDetailsWithTotal, false, t);
             for(const orderDetail of orderDetailsWithTotal) {
                 if(orderDetail.voucherIds){
                     let discountForDetail = 0;
-                    orderDetail.voucherIds.forEach(voucherId => {
+                    for(const voucherId of orderDetail.voucherIds) {
                         const voucher = vouchersForOrderDetails[orderDetail.productId][voucherId];
                         if(voucherDb[voucherId])
-                            throw AppError.BadRequest(res, `Only apply ${voucherId} once on this order`);
+                            throw new Error(`Only apply ${voucherId} once on this order`);
                         voucherDb[voucherId] = voucher;
                         if(!voucher) 
-                            throw AppError.BadRequest(res, `Voucher ${voucherId} can not applied for this product ${orderDetail.productId}`);
+                            throw new Error(`Voucher ${voucherId} can not applied for this product ${orderDetail.productId}`);
+
+                        const quantity = await redis.get(voucherId.toString());
+                        console.log('quantity: ' + quantity);
+                        if(!quantity || parseInt(quantity) < 1) 
+                            throw new Error(`Voucher ${voucherId} is out of stock`);
+                        
 
                         let value = voucher.type === 'value' ? voucher.value : (voucher.value * orderDetail.total) / 100;
                         if(value > voucher.maxValue) value = voucher.maxValue;
                         discountForDetail += orderDetail.total < value ? orderDetail.total : value;
                         console.log(voucherId, value)
-                    });
+                    }
 
+                    orderDetail.totalAfterApplied -= discountForDetail;
                     discount += discountForDetail > orderDetail.total ? orderDetail.total : discountForDetail;
                 }
             }
 
-            if(totalCost - discount !== dto.totalCost) throw AppError.BadRequest(res, 'Total cost is not valid');
+            console.log(totalCost - discount)
+
+            if(totalCost - discount !== dto.totalCost) throw new Error('Total cost is not valid');
 
             let orderDetails: OrderDetail[] = [];
             for(const detail of orderDetailsWithTotal) {            
                 const orderDetail: any = await OrderDetail.create({
                     quantity: detail.quantity,
-                    total: detail.total
+                    total: detail.total,
+                    totalAfterApplied: detail.totalAfterApplied,
                 }, {transaction: t});
 
                 await detail.product.addOrderDetails(orderDetail, {transaction: t});
@@ -122,6 +137,8 @@ async function createOrder(res: Response, dto: createOrderDto, user: JwtPayload)
                     await voucher.update({
                         quantity: voucher.quantity - 1
                     }, {transaction: t});
+                    console.log(voucher.quantity);
+                    await redis.set(voucher.id.toString(), voucher.quantity)
                 }
             }
 
@@ -134,13 +151,13 @@ async function createOrder(res: Response, dto: createOrderDto, user: JwtPayload)
     }
 }
 
-async function updateOrder(res: Response, orderId: number, user: JwtPayload, status: string) {
+async function updateOrder(orderId: number, user: JwtPayload, status: string) {
     const order = await Order.findByPk(orderId);
-    if(!order) throw AppError.NotFound(res, `Order ${orderId} not found`);
-    if(order.status === 'cancelled') throw AppError.BadRequest(res, `Order ${orderId} has been cancelled`);
-    if(!user.isAdmin && user.id !== order.UserId) throw AppError.Forbidden(res, 'You are not allowed to update this order');
+    if(!order) throw new Error(`Order ${orderId} not found`);
+    if(order.status === 'cancelled') throw new Error(`Order ${orderId} has been cancelled`);
+    if(!user.isAdmin && user.id !== order.UserId) throw new Error('You are not allowed to update this order');
     if(status !== 'cancelled' && !user.isAdmin)
-        throw AppError.Forbidden(res, 'Only admin can update progress status of this order');
+        throw new Error('You are not allowed to update progress of this order');
 
     await order.update({status});
 }
@@ -166,9 +183,9 @@ async function removeOrder(res: Response, orderId: number, user: JwtPayload) {
     
 }
 
-async function getVouchersForOrder(res: Response, dto: createOrderDto, user: JwtPayload) {
-    const {totalCost, orderDetailsWithTotal} = await calculateOrder(res, dto.items);
-    if(totalCost !== dto.totalCost) throw AppError.BadRequest(res, 'Total cost is not valid'); 
+async function getVouchersForOrder(dto: createOrderDto, user: JwtPayload) {
+    const {totalCost, orderDetailsWithTotal} = await calculateOrder(dto.items);
+    if(totalCost !== dto.totalCost) throw new Error('Total cost is not valid'); 
 
     const vouchersForUser = await getVoucherForUser(user, totalCost);
     const vouchersForOrderDetails = await getVoucherForOrderDetails(orderDetailsWithTotal);
@@ -179,12 +196,12 @@ async function getVouchersForOrder(res: Response, dto: createOrderDto, user: Jwt
     };
 }
 
-async function calculateOrder(res: Response, orderDetails: OrderItemDto[]) {
+async function calculateOrder(orderDetails: OrderItemDto[]) {
     let totalCost = 0;
     let orderDetailsWithTotal = [];
     for(const orderDetail of orderDetails) {
         const product = await getById(Product, orderDetail.productId, ['id', 'price']);
-        if(!product) throw AppError.NotFound(res, `Product ${orderDetail.productId} not found`);
+        if(!product) throw new Error(`Product ${orderDetail.productId} not found`);
                 
         totalCost += product.price * orderDetail.quantity;
         orderDetailsWithTotal.push({
@@ -192,6 +209,7 @@ async function calculateOrder(res: Response, orderDetails: OrderItemDto[]) {
             quantity: orderDetail.quantity,
             voucherIds: orderDetail.voucherIds,
             total: product.price * orderDetail.quantity,
+            totalAfterApplied: product.price * orderDetail.quantity,
             product,
             categories: await product.getCategories({attributes: ['id'], joinTableAttributes: []})
         });

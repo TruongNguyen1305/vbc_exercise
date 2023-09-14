@@ -20,7 +20,7 @@ export async function getGroup(req: Request, res: Response, next: NextFunction) 
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }
@@ -31,7 +31,7 @@ export async function createGroup(req: Request, res: Response, next: NextFunctio
         res.status(201).json(group);
     } catch (error) {
         if(error instanceof Error)
-            next(AppError.InternalServerError(res, error.message));
+            next(AppError.BadRequest(res, error.message));
     }
 }
 
@@ -43,7 +43,7 @@ export async function updateGroup(req: Request, res: Response, next: NextFunctio
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }
@@ -56,7 +56,7 @@ export async function removeGroup(req: Request, res: Response, next: NextFunctio
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }
@@ -69,7 +69,7 @@ export async function addUserToGroup(req: Request, res: Response, next: NextFunc
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }
@@ -82,7 +82,7 @@ export async function removeUserFromGroup(req: Request, res: Response, next: Nex
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }

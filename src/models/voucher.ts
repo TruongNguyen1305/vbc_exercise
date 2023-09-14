@@ -3,6 +3,7 @@ import {sequelize} from '../config';
 import { ValidationOptions } from "sequelize/types/instance-validator";
 
 export class Voucher extends Model {
+    declare id: number;
     declare startDate: Date;
     declare endDate: Date;
     declare type: string;

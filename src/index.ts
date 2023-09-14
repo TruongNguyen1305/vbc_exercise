@@ -24,7 +24,6 @@ app.use('/api', rateLimit({
 app.use(helmet());
 app.use(express.json({limit: '10kb'}));
 app.use(express.urlencoded({extended: true, limit: '10kb'}));
-app.use(morgan('common'));
 app.use(cors({
     origin: [
         'http://localhost:3000',
@@ -32,6 +31,10 @@ app.use(cors({
     credentials: true
 }));
 app.use(cookies(process.env.COOKIE_SECRET));
+
+if(process.env.NODE_ENV !== 'test') {
+    app.use(morgan('common'));
+}
 
 /**********************Connect************************/
 route(app);
@@ -51,3 +54,5 @@ app.listen(port, async () => {
         console.error('Unable to connect to the database:', error);
     }
 });
+
+export default app;

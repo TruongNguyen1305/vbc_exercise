@@ -10,6 +10,12 @@ const host: string = process.env.DATABASE_HOST || 'localhost';
 
 export const sequelize = new Sequelize(dbName, username, password, {
     host, //in the future: mysql
-    // port: 3306,
+    port: process.env.NODE_ENV === 'test' ? 3307 : 3306,
     dialect: 'mysql',
+    pool: {
+        max: 100, // Số lượng kết nối tối đa
+        min: 0,   // Số lượng kết nối tối thiểu
+        acquire: 30000, // Thời gian tối đa (milliseconds) để lấy được kết nối
+        idle: 10000    // Thời gian tối đa (milliseconds) một kết nối có thể ở trạng thái idle
+    },
 });

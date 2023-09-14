@@ -4,9 +4,8 @@ import { User, Voucher } from "../models";
 import { deleteEntryById } from "../repositories/crud";
 import { CreateVoucherDto, JwtPayload, OrderItemWithTotalDto, UpdateVoucherDto } from "../types";
 import { sequelize } from "../config";
-import { AppError } from '../utils';
-import { Response } from 'express';
 import { Op, Transaction } from 'sequelize';
+import { redis } from '../config';
 
 async function getAllVouchers() {
     const vouchers: Voucher[] = await Voucher.findAll();
@@ -37,15 +36,15 @@ async function getVoucher(id: number) {
     };
 }
 
-async function createVoucher(res: Response, dto: CreateVoucherDto) {
+async function createVoucher(dto: CreateVoucherDto) {
     const result = await sequelize.transaction(async (t) => {
         const {appliedIds, ...instance}  = dto;
 
         if(dto.type === 'value' && dto.maxValue)
-            throw AppError.BadRequest(res, "Don't need to provide maxValue if voucher type is 'value'");
+            throw new Error("Don't need to provide maxValue if voucher type is 'value'");
 
         if(dto.applyFor !== 'all' && (!appliedIds || appliedIds.length === 0)) 
-            throw AppError.BadRequest(res, 'appliedIds is required');
+            throw new Error('appliedIds is required');
 
         const newVoucher: any = await Voucher.create({
             ...instance,
@@ -66,6 +65,8 @@ async function createVoucher(res: Response, dto: CreateVoucherDto) {
                 await newVoucher.setCategories(dto.appliedIds, {transaction: t});
         }
 
+        await redis.set(newVoucher.id.toString(), newVoucher.quantity);
+
         return newVoucher;
     });
 
@@ -82,27 +83,27 @@ async function createVoucher(res: Response, dto: CreateVoucherDto) {
     return result;
 }
 
-async function updateVoucher(res: Response, voucherId: number, dto: UpdateVoucherDto) {
+async function updateVoucher(voucherId: number, dto: UpdateVoucherDto) {
     
     const result = await sequelize.transaction(async (t) => {
         
-        const voucher: any = await Voucher.findByPk(voucherId);
+        const voucher: any = await Voucher.findByPk(voucherId, {transaction: t, lock: true});
         
-        if(!voucher) throw AppError.NotFound(res, `Voucher ${voucherId} not found`);
+        if(!voucher) throw new Error(`Voucher ${voucherId} not found`);
 
-        if(voucher.status !== 'created') throw AppError.BadRequest(res, 'Cannot update voucher which was released');
+        if(voucher.status !== 'created') throw new Error('Cannot update voucher which was released');
         
         const {appliedIds, ...instance}  = dto;
 
         if(dto.applyFor) {
             if(dto.applyFor === 'all') {
                 if(appliedIds && appliedIds.length > 0) {
-                    throw AppError.BadRequest(res, "You don't need to pass appliedIds when applyFor is 'all'");
+                    throw new Error("You don't need to pass appliedIds when applyFor is 'all'");
                 }
             }
             else{
                 if(!appliedIds || appliedIds.length === 0) {
-                    throw AppError.BadRequest(res, 'appliedIds is required');
+                    throw new Error('appliedIds is required');
                 }
             }
         }
@@ -159,6 +160,9 @@ async function getVoucherForUser(userData: JwtPayload, totalCost: number, getLis
             lowerBoundDeal: {
                 [Op.lte]: totalCost
             },
+            quantity: {
+                [Op.gt]: 0
+            }
             //status: 'in-term' //for test
         },
         joinTableAttributes: [],
@@ -179,6 +183,9 @@ async function getVoucherForUser(userData: JwtPayload, totalCost: number, getLis
         where: {
             lowerBoundDeal: {
                 [Op.lte]: totalCost
+            },
+            quantity: {
+                [Op.gt]: 0
             },
             // status: 'in-term', //for test
             applyFor: 'all',
@@ -219,6 +226,9 @@ async function getVoucherForOrderDetails(orderDetails: OrderItemWithTotalDto[], 
                 lowerBoundDeal: {
                     [Op.lte]: orderDetail.total
                 },
+                quantity: {
+                    [Op.gt]: 0
+                }
                 // status: 'in-term', //for test
             },
             joinTableAttributes: [],

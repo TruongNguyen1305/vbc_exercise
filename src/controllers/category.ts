@@ -20,7 +20,7 @@ export async function getCategory(req: Request, res: Response, next: NextFunctio
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }
@@ -31,7 +31,7 @@ export async function createCategory(req: Request, res: Response, next: NextFunc
         res.status(201).json(newCat);
     } catch (error) {
         if(error instanceof Error)
-            next(AppError.InternalServerError(res, error.message));
+            next(AppError.BadRequest(res, error.message));
     }
 }
 
@@ -43,7 +43,7 @@ export async function updateCategory(req: Request, res: Response, next: NextFunc
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }
@@ -56,7 +56,7 @@ export async function removeCategory(req: Request, res: Response, next: NextFunc
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }

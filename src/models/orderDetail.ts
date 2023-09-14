@@ -22,6 +22,13 @@ OrderDetail.init({
         validate: {
             min: 0
         }
+    },
+    totalAfterApplied: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     }
 }, {
     sequelize,

@@ -24,7 +24,7 @@ export async function getProduct(req: Request, res: Response, next: NextFunction
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }
@@ -35,7 +35,7 @@ export async function createProduct(req: Request, res: Response, next: NextFunct
         res.status(201).json(newProduct);
     } catch (error) {
         if(error instanceof Error)
-            next(AppError.InternalServerError(res, error.message));
+            next(AppError.BadRequest(res, error.message));
     }
 }
 
@@ -47,7 +47,7 @@ export async function updateProduct(req: Request, res: Response, next: NextFunct
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }
@@ -60,7 +60,7 @@ export async function removeProduct(req: Request, res: Response, next: NextFunct
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.InternalServerError(res, error.message))
+                next(AppError.BadRequest(res, error.message))
         }
     }
 }

@@ -14,8 +14,46 @@ services:
     networks:
       - ecommerce
 
+  mysql-test:
+    image: mysql
+    container_name: mysql_database_test
+    ports:
+      - 3307:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DATABASE_USER_PASSWORD}
+      MYSQL_DATABASE: ${DATABASE_NAME}
+    volumes:
+      - mysql-ecommerce-test:/var/lib/mysql
+    networks:
+      - ecommerce
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${DATABASE_USER_PASSWORD}
+    ports:
+      - 6379:6379
+    volumes:
+      - redis-ecommerce:/usr/local/etc/redis
+    networks:
+      - ecommerce  
+
+  redis-test:
+    image: redis:alpine
+    container_name: redis-test
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${DATABASE_USER_PASSWORD}
+    ports:
+      - 6380:6379
+    volumes:
+      - redis-ecommerce-test:/usr/local/etc/redis
+    networks:
+      - ecommerce
+
 volumes:
   mysql-ecommerce:
+  mysql-ecommerce-test:
+  redis-ecommerce:
+  redis-ecommerce-test:
 networks:
   ecommerce:
     driver: bridge
