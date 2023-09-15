@@ -8,5 +8,6 @@ RUN npm run build
 FROM node:18-alpine as main
 WORKDIR /app
 COPY --from=build /app .
-RUN npm start
+EXPOSE 3333
+CMD [ "npm", "start" ]
 

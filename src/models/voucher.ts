@@ -26,7 +26,6 @@ Voucher.init({
     code: {
         type: DataTypes.UUID,
         allowNull: false,
-        unique: true
     },
     description: {
         type: DataTypes.STRING,

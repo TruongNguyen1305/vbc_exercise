@@ -62,16 +62,17 @@ async function createOrder(dto: createOrderDto, user: JwtPayload) {
             if(dto.voucherIds) {
                 const vouchersForUser = await getVoucherForUser(user, totalCost, false, t);
                 for(const voucherId of dto.voucherIds){
+                    const quantity = await redis.get(voucherId.toString());
+                    if(quantity && parseInt(quantity) < 1){
+                        console.log(quantity);
+                        throw new Error(`Voucher ${voucherId} is out of stock`);
+                    }
+
                     const voucher = vouchersForUser[voucherId]
                     voucherDb[voucherId] = voucher;
                     if(!voucher) 
                         throw new Error(`Voucher ${voucherId} can not applied for this order`);
-                    
-                    const quantity = await redis.get(voucherId.toString());
-                    console.log('quantity: ' + quantity);
-                    if(!quantity || parseInt(quantity) < 1) 
-                        throw new Error(`Voucher ${voucherId} is out of stock`);
-                    
+                            
                     const value = voucher.type === 'value' ? voucher.value : (voucher.value * totalCost) / 100;
                     discount += value < voucher.maxValue ? value : voucher.maxValue;
                 }
@@ -82,18 +83,16 @@ async function createOrder(dto: createOrderDto, user: JwtPayload) {
                 if(orderDetail.voucherIds){
                     let discountForDetail = 0;
                     for(const voucherId of orderDetail.voucherIds) {
+                        const quantity = await redis.get(voucherId.toString());
+                        if(quantity && parseInt(quantity) < 1) 
+                            throw new Error(`Voucher ${voucherId} is out of stock`);
+
                         const voucher = vouchersForOrderDetails[orderDetail.productId][voucherId];
                         if(voucherDb[voucherId])
                             throw new Error(`Only apply ${voucherId} once on this order`);
                         voucherDb[voucherId] = voucher;
                         if(!voucher) 
                             throw new Error(`Voucher ${voucherId} can not applied for this product ${orderDetail.productId}`);
-
-                        const quantity = await redis.get(voucherId.toString());
-                        console.log('quantity: ' + quantity);
-                        if(!quantity || parseInt(quantity) < 1) 
-                            throw new Error(`Voucher ${voucherId} is out of stock`);
-                        
 
                         let value = voucher.type === 'value' ? voucher.value : (voucher.value * orderDetail.total) / 100;
                         if(value > voucher.maxValue) value = voucher.maxValue;

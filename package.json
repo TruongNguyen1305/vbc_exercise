@@ -9,7 +9,6 @@
     "test:order": "mocha -r ts-node/register --timeout 6000 'test/order.spec.ts'",
     "build": "tsc",
     "dev": "SET NODE_ENV=test&& nodemon ./src/index.ts",
-    "dev:test": "SET NODE_ENV=test&& ts-node ./src/index.ts",
     "start": "node ./dist/index.js"
   },
   "keywords": [],
