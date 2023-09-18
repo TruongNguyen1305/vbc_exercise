@@ -3,23 +3,21 @@ import jwt from 'jsonwebtoken';
 import { User } from "../models";
 import { getOne } from "../repositories/crud";
 import { JwtPayload, LoginDto } from "../types";
-import { AppError, generateAccessToken, generateRefreshToken } from "../utils";
+import { generateAccessToken, generateRefreshToken } from "../utils";
 
 
-async function login(dto: LoginDto, res: Response) {
+async function login(dto: LoginDto) {
     const user: User = await getOne(
         User, 
         {username: dto.username}, 
         ['id', 'username', 'password', 'isAdmin'],    
     );
 
-    if(!user) {
-        throw AppError.BadRequest(res, 'User not found');
-    }
+    if(!user) 
+        throw new Error('User not found');
 
-    if(!await user.isMatchpassword(dto.password)) {
-        throw AppError.BadRequest(res, 'Invalid password');
-    }
+    if(!await user.isMatchpassword(dto.password)) 
+        throw new Error('Invalid password');
 
     return {
         id: user.id,
@@ -28,7 +26,7 @@ async function login(dto: LoginDto, res: Response) {
     };
 }
 
-async function register(dto: LoginDto, res: Response) {
+async function register(dto: LoginDto) {
     const [user, created] = await User.findOrCreate({
         where: {username: dto.username},
         defaults: {
@@ -36,9 +34,8 @@ async function register(dto: LoginDto, res: Response) {
         },
     });
 
-    if(!created) {
-        throw AppError.BadRequest(res, 'User already exists');
-    }
+    if(!created) 
+        throw new Error('User already exists');
 
     return {
         id: user.id,

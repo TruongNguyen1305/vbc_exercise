@@ -20,7 +20,7 @@ export async function getCategory(req: Request, res: Response, next: NextFunctio
         if(error instanceof Error) {
             error.message.includes('not found') ? 
                 next(AppError.NotFound(res, error.message)) : 
-                next(AppError.BadRequest(res, error.message))
+                next(AppError.InternalServerError(res, error.message))
         }
     }
 }

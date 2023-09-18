@@ -4,7 +4,7 @@ import * as authService from "../services/auth";
 
 async function login(req: Request, res: Response, next: NextFunction) {
     try {
-        const user = await authService.login(req.body, res);
+        const user = await authService.login(req.body);
         const {accessToken, refreshToken} = authService.generateToken({
             id: user.id,
             username: user.username,
@@ -23,13 +23,19 @@ async function login(req: Request, res: Response, next: NextFunction) {
             accessToken
         });
     } catch (error) {
-        next(error);
+        const errors = ['User not found', 'Invalid password', ]
+        if(error instanceof Error){
+            if(errors.includes(error.message))
+                next(AppError.BadRequest(res, error.message));
+            else
+                next(AppError.InternalServerError(res, error.message))
+        }
     }
 }
 
 async function register(req: Request, res: Response, next: NextFunction) {
     try {
-        const user = await authService.register(req.body, res);
+        const user = await authService.register(req.body);
 
         const {accessToken, refreshToken} = authService.generateToken({
             id: user.id,
@@ -49,7 +55,12 @@ async function register(req: Request, res: Response, next: NextFunction) {
             accessToken
         });
     } catch (error) {
-        next(error);
+        if(error instanceof Error) {
+            if(error.message === 'User already exists')
+                next(AppError.BadRequest(res, error.message));
+            else
+                next(AppError.InternalServerError(res, error.message))
+        }
     }
 }
 
